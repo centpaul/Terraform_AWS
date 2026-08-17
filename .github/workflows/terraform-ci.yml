@@ -12,11 +12,16 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   terraform:
-    name: Terraform Validation
+    name: Terraform Validation and Plan
     runs-on: ubuntu-latest
+
+    env:
+      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_source_address: ${{ vars.TF_VAR_SSH_SOURCE_ADDRESS }}
 
     steps:
       - name: Checkout repository
@@ -33,3 +38,19 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
+
+      - name: Configure AWS credentials
+        if: github.event_name == 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::085568226428:role/GitHubActions-Terraform-AWS-Plan
+          aws-region: us-east-1
+          allowed-account-ids: "085568226428"
+
+      - name: Verify AWS identity
+        if: github.event_name == 'pull_request'
+        run: aws sts get-caller-identity
+
+      - name: Terraform Plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -input=false
